@@ -4,7 +4,7 @@ import shutil
 # Define the file extensions for different categories
 file_types = {
     'Videos': ['.mp4', '.mkv', '.flv', '.avi', '.mov'],
-    'Photos': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff'],
+    'Photos': ['.jpg', '.jpeg', '.png', '.cr2', '.gif', '.bmp', '.tiff'],
     'Music': ['.mp3', '.wav', '.aac', '.flac', '.ogg'],
     'Documents': ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']
 }
