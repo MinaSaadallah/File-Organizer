@@ -263,6 +263,330 @@ class FileOrganizer:
                 return f"{size_bytes:.2f} {unit}"
             size_bytes /= 1024
 
+class FileOrganizerCLI:
+    def __init__(self):
+        self.organizer = FileOrganizer()
+        self.running = True
+        
+    def display_banner(self):
+        """Display application banner"""
+        print("\n" + "="*60)
+        print("               ADVANCED FILE ORGANIZER")
+        print("                    Terminal Edition")
+        print("="*60)
+        print("Type 'help' to see available commands\n")
+    
+    def display_help(self):
+        """Display available commands"""
+        print("\nAvailable commands:")
+        print("  organize <directory>    - Organize files in specified directory")
+        print("  settings                - Manage file type settings")
+        print("  exclude                 - Manage exclude patterns")
+        print("  undo                    - Undo last operation")
+        print("  stats                   - Show last operation statistics")
+        print("  help                    - Show this help message")
+        print("  exit                    - Exit the application\n")
+    
+    def run(self):
+        """Main CLI loop"""
+        self.display_banner()
+        
+        while self.running:
+            try:
+                command = input("file-organizer> ").strip()
+                
+                if not command:
+                    continue
+                
+                # Parse command and arguments
+                parts = command.split(maxsplit=1)
+                cmd = parts[0].lower()
+                args = parts[1] if len(parts) > 1 else ""
+                
+                # Process commands
+                if cmd == "exit" or cmd == "quit":
+                    self.running = False
+                    
+                elif cmd == "help":
+                    self.display_help()
+                    
+                elif cmd == "organize":
+                    self.handle_organize(args)
+                    
+                elif cmd == "settings":
+                    self.manage_settings()
+                    
+                elif cmd == "exclude":
+                    self.manage_exclude_patterns()
+                    
+                elif cmd == "undo":
+                    self.handle_undo()
+                    
+                elif cmd == "stats":
+                    print(self.organizer.get_summary())
+                    
+                else:
+                    print(f"Unknown command: {cmd}")
+                    print("Type 'help' to see available commands")
+            
+            except KeyboardInterrupt:
+                print("\nType 'exit' to quit the application")
+            except Exception as e:
+                print(f"Error: {str(e)}")
+    
+    def handle_organize(self, args):
+        """Handle organize command"""
+        if not args:
+            print("Usage: organize <directory>")
+            return
+            
+        directory = args.strip()
+        
+        if not os.path.isdir(directory):
+            print(f"Error: '{directory}' is not a valid directory")
+            return
+        
+        # Get organization options
+        organize_by_date = self.prompt_yes_no("Organize by date?", False)
+        copy_instead_of_move = self.prompt_yes_no("Copy files instead of moving?", False)
+        
+        print(f"\nOrganizing files in: {directory}")
+        print(f"  - {'Creating date-based folders' if organize_by_date else 'No date organization'}")
+        print(f"  - {'Copying files' if copy_instead_of_move else 'Moving files'}")
+        
+        # Confirm before proceeding
+        if not copy_instead_of_move:
+            if not self.prompt_yes_no("This will move files in the selected directory. Continue?", False):
+                return
+        
+        # Track start time for performance measurement
+        start_time = time.time()
+        
+        try:
+            # Show progress indicator
+            print("Processing...", end="", flush=True)
+            
+            # Perform organization
+            stats = self.organizer.organize_files(directory, organize_by_date, copy_instead_of_move)
+            
+            # Calculate elapsed time
+            elapsed_time = time.time() - start_time
+            
+            # Clear progress indicator
+            print("\r" + " " * 20 + "\r", end="")
+            
+            # Show results
+            print("\n" + "="*50)
+            print(self.organizer.get_summary())
+            print(f"Operation completed in {elapsed_time:.2f} seconds")
+            print("="*50 + "\n")
+            
+        except Exception as e:
+            print(f"\nError: {str(e)}")
+    
+    def handle_undo(self):
+        """Handle undo command"""
+        if self.organizer.undo_last_operation():
+            print("Last operation has been undone.")
+        else:
+            print("No operations to undo or undo failed.")
+    
+    def manage_settings(self):
+        """Manage file type settings"""
+        while True:
+            print("\nFile Type Settings:")
+            print("  1. View current settings")
+            print("  2. Add new category")
+            print("  3. Edit category")
+            print("  4. Delete category")
+            print("  5. Save settings")
+            print("  6. Return to main menu")
+            
+            choice = input("\nEnter your choice (1-6): ").strip()
+            
+            if choice == "1":
+                self.display_file_types()
+            elif choice == "2":
+                self.add_file_type_category()
+            elif choice == "3":
+                self.edit_file_type_category()
+            elif choice == "4":
+                self.delete_file_type_category()
+            elif choice == "5":
+                self.organizer.save_config()
+                print("Settings saved successfully.")
+            elif choice == "6":
+                break
+            else:
+                print("Invalid choice. Please try again.")
+    
+    def display_file_types(self):
+        """Display current file type settings"""
+        print("\nCurrent File Type Categories:")
+        
+        for i, (category, extensions) in enumerate(self.organizer.file_types.items(), 1):
+            print(f"{i}. {category}: {', '.join(extensions)}")
+    
+    def add_file_type_category(self):
+        """Add a new file type category"""
+        category = input("Enter new category name: ").strip()
+        
+        if not category:
+            print("Category name cannot be empty.")
+            return
+            
+        if category in self.organizer.file_types:
+            print(f"Category '{category}' already exists.")
+            return
+            
+        extensions_input = input("Enter file extensions (comma-separated): ").strip()
+        
+        if not extensions_input:
+            print("Extensions cannot be empty.")
+            return
+            
+        # Parse extensions
+        extensions = [ext.strip() for ext in extensions_input.split(',')]
+        # Ensure extensions start with a dot
+        extensions = ['.' + ext.lstrip('.') for ext in extensions if ext]
+        
+        # Add to file types
+        self.organizer.file_types[category] = extensions
+        print(f"Category '{category}' added successfully.")
+    
+    def edit_file_type_category(self):
+        """Edit an existing file type category"""
+        self.display_file_types()
+        
+        categories = list(self.organizer.file_types.keys())
+        category_index = input("\nEnter category number to edit: ").strip()
+        
+        try:
+            index = int(category_index) - 1
+            if 0 <= index < len(categories):
+                category = categories[index]
+                current_extensions = self.organizer.file_types[category]
+                
+                print(f"Editing category: {category}")
+                print(f"Current extensions: {', '.join(current_extensions)}")
+                
+                extensions_input = input("Enter new file extensions (comma-separated): ").strip()
+                
+                if not extensions_input:
+                    print("Extensions cannot be empty.")
+                    return
+                    
+                # Parse extensions
+                extensions = [ext.strip() for ext in extensions_input.split(',')]
+                # Ensure extensions start with a dot
+                extensions = ['.' + ext.lstrip('.') for ext in extensions if ext]
+                
+                # Update file types
+                self.organizer.file_types[category] = extensions
+                print(f"Category '{category}' updated successfully.")
+            else:
+                print("Invalid category number.")
+        except ValueError:
+            print("Please enter a valid number.")
+    
+    def delete_file_type_category(self):
+        """Delete a file type category"""
+        self.display_file_types()
+        
+        categories = list(self.organizer.file_types.keys())
+        category_index = input("\nEnter category number to delete: ").strip()
+        
+        try:
+            index = int(category_index) - 1
+            if 0 <= index < len(categories):
+                category = categories[index]
+                
+                if self.prompt_yes_no(f"Are you sure you want to delete the '{category}' category?", False):
+                    del self.organizer.file_types[category]
+                    print(f"Category '{category}' deleted successfully.")
+            else:
+                print("Invalid category number.")
+        except ValueError:
+            print("Please enter a valid number.")
+    
+    def manage_exclude_patterns(self):
+        """Manage exclude patterns"""
+        while True:
+            print("\nExclude Patterns (Regex):")
+            print("  1. View current patterns")
+            print("  2. Add new pattern")
+            print("  3. Delete pattern")
+            print("  4. Return to main menu")
+            
+            choice = input("\nEnter your choice (1-4): ").strip()
+            
+            if choice == "1":
+                self.display_exclude_patterns()
+            elif choice == "2":
+                self.add_exclude_pattern()
+            elif choice == "3":
+                self.delete_exclude_pattern()
+            elif choice == "4":
+                break
+            else:
+                print("Invalid choice. Please try again.")
+    
+    def display_exclude_patterns(self):
+        """Display current exclude patterns"""
+        print("\nCurrent Exclude Patterns:")
+        
+        if not self.organizer.excluded_patterns:
+            print("  No patterns defined.")
+            return
+            
+        for i, pattern in enumerate(self.organizer.excluded_patterns, 1):
+            print(f"{i}. {pattern}")
+    
+    def add_exclude_pattern(self):
+        """Add a new exclude pattern"""
+        pattern = input("Enter regex pattern to exclude: ").strip()
+        
+        if not pattern:
+            print("Pattern cannot be empty.")
+            return
+            
+        if self.organizer.add_exclude_pattern(pattern):
+            print(f"Pattern '{pattern}' added successfully.")
+        else:
+            print("Invalid regular expression pattern.")
+    
+    def delete_exclude_pattern(self):
+        """Delete an exclude pattern"""
+        self.display_exclude_patterns()
+        
+        if not self.organizer.excluded_patterns:
+            return
+            
+        pattern_index = input("\nEnter pattern number to delete: ").strip()
+        
+        try:
+            index = int(pattern_index) - 1
+            if 0 <= index < len(self.organizer.excluded_patterns):
+                pattern = self.organizer.excluded_patterns[index]
+                
+                if self.prompt_yes_no(f"Are you sure you want to delete the pattern '{pattern}'?", False):
+                    self.organizer.excluded_patterns.pop(index)
+                    self.organizer.save_config()
+                    print(f"Pattern deleted successfully.")
+            else:
+                print("Invalid pattern number.")
+        except ValueError:
+            print("Please enter a valid number.")
+    
+    def prompt_yes_no(self, question, default=True):
+        """Prompt for yes/no response"""
+        default_str = "Y/n" if default else "y/N"
+        response = input(f"{question} [{default_str}]: ").strip().lower()
+        
+        if not response:
+            return default
+            
+        return response.startswith('y')
 
 class FileOrganizerGUI:
     def __init__(self, root):
@@ -622,25 +946,84 @@ class FileOrganizerGUI:
 if __name__ == "__main__":
     # Check if running in GUI mode or command line mode
     import sys
+    import argparse
     
-    if len(sys.argv) > 1 and sys.argv[1] == "--cli":
-        # Command line mode
+    # Create a command-line argument parser
+    parser = argparse.ArgumentParser(description="File Organizer - A tool to organize files into categorized folders")
+    
+    # Command mode subparsers
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument("--gui", "-g", action="store_true", help="Run in graphical user interface mode")
+    mode_group.add_argument("--cli", "-c", action="store_true", help="Run in basic command-line mode (non-interactive)")
+    
+    # Arguments for CLI mode
+    parser.add_argument("directory", nargs="?", help="Directory to organize (required for basic CLI mode)")
+    parser.add_argument("--date", "-d", action="store_true", help="Organize files into date-based subfolders")
+    parser.add_argument("--copy", "-cp", action="store_true", help="Copy files instead of moving them")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Display detailed output")
+    parser.add_argument("--exclude", "-e", action="append", help="Regex patterns to exclude files (can be used multiple times)")
+    
+    args = parser.parse_args()
+    
+    # Check which mode to run in
+    if args.gui:
+        # GUI mode
+        try:
+            root = tk.Tk()
+            app = FileOrganizerGUI(root)
+            root.mainloop()
+        except Exception as e:
+            print(f"Error starting GUI: {str(e)}")
+            print("Try running in terminal mode with: python File_Organizer.py")
+    elif args.cli:
+        # Basic command-line mode (non-interactive)
+        if not args.directory:
+            parser.error("the directory argument is required for CLI mode")
+            
+        # Create and configure the organizer
         organizer = FileOrganizer()
         
-        if len(sys.argv) < 3:
-            print("Usage: python file_organizer.py --cli <directory> [--date] [--copy]")
-            sys.exit(1)
+        # Add exclude patterns if provided
+        if args.exclude:
+            for pattern in args.exclude:
+                if organizer.add_exclude_pattern(pattern):
+                    print(f"Excluding files matching: {pattern}")
+        
+        # Show processing message
+        print(f"Organizing files in: {args.directory}")
+        print("Configuration:")
+        print(f"  - {'Creating date-based folders' if args.date else 'No date organization'}")
+        print(f"  - {'Copying files' if args.copy else 'Moving files'}")
+        
+        # Track start time for performance measurement
+        start_time = time.time()
+        
+        # Perform organization
+        try:
+            stats = organizer.organize_files(args.directory, args.date, args.copy)
             
-        directory = sys.argv[2]
-        organize_by_date = "--date" in sys.argv
-        copy_instead_of_move = "--copy" in sys.argv
-        
-        print(f"Organizing {directory}...")
-        stats = organizer.organize_files(directory, organize_by_date, copy_instead_of_move)
-        print(organizer.get_summary())
-        
+            # Calculate elapsed time
+            elapsed_time = time.time() - start_time
+            
+            # Show results
+            print("\n" + "="*50)
+            print(organizer.get_summary())
+            print(f"Operation completed in {elapsed_time:.2f} seconds")
+            print("="*50)
+            
+            # Show additional info if verbose
+            if args.verbose:
+                print("\nDetailed log available in: file_organizer.log")
+            
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            sys.exit(1)
     else:
-        # GUI mode
-        root = tk.Tk()
-        app = FileOrganizerGUI(root)
-        root.mainloop()
+        # Interactive terminal mode (default)
+        try:
+            cli = FileOrganizerCLI()
+            cli.run()
+        except Exception as e:
+            print(f"Error in terminal interface: {str(e)}")
+            print("For basic command-line mode, try: python File_Organizer.py --cli <directory>")
+            print("For GUI mode, try: python File_Organizer.py --gui")
